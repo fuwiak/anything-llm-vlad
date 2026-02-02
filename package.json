@@ -23,6 +23,7 @@
     "prisma:seed": "cd server && npx prisma db seed",
     "prisma:setup": "yarn prisma:generate && yarn prisma:migrate && yarn prisma:seed",
     "prisma:reset": "truncate -s 0 server/storage/anythingllm.db && yarn prisma:migrate",
+    "railway:setup-db": "node scripts/setup-railway-db.cjs",
     "prod:server": "cd server && yarn start",
     "prod:frontend": "cd frontend && yarn build",
     "build": "yarn install && cd server && yarn install && cd ../frontend && yarn install && cd ../collector && yarn install && cd .. && yarn prisma:generate && yarn prod:frontend && mkdir -p server/public && cp -r frontend/dist/* server/public/",
@@ -35,6 +36,7 @@
   "private": false,
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "pg": "^8.11.5"
   }
 }
