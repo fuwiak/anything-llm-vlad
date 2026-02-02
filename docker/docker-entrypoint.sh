@@ -28,7 +28,7 @@ if [ -z "$DATABASE_URL" ] || [ "$DATABASE_URL" = "\${{Postgres.DATABASE_URL}}" ]
     echo "DATABASE_URL check..."
     echo "=========================================="
     echo "DATABASE_URL value: ${DATABASE_URL:0:50}..."
-    
+
     # Try to get DATABASE_URL from Railway's PostgreSQL service
     # Railway sets this automatically, but sometimes it needs to be referenced
     if [ -z "$DATABASE_URL" ] || [ "$DATABASE_URL" = "\${{Postgres.DATABASE_URL}}" ] || [ "$DATABASE_URL" = '${{Postgres.DATABASE_URL}}' ]; then
