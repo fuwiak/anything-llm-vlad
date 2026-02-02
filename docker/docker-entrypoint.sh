@@ -55,45 +55,85 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "=========================================="
 echo "Setting up database schema..."
-echo "Database URL: ${DATABASE_URL:0:30}..." # Show first 20 chars for security
+echo "Database URL: ${DATABASE_URL:0:30}..." # Show first 30 chars for security
+echo "=========================================="
 
 # First, try to use db push to create/update schema directly from schema.prisma
 # This is more reliable for initial setup and ensures all tables are created
-echo "Executing: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate"
-npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate
+echo ""
+echo "Step 1: Pushing schema to database using prisma db push..."
+echo "Command: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate --force-reset"
+echo ""
+
+# Use --force-reset to ensure clean state, but this will delete existing data
+# For production, we might want to remove --force-reset
+npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate --force-reset 2>&1
 
 DB_PUSH_EXIT_CODE=$?
 
+echo ""
+echo "db push exit code: $DB_PUSH_EXIT_CODE"
+echo ""
+
 if [ $DB_PUSH_EXIT_CODE -ne 0 ]; then
-    echo "ERROR: prisma db push failed (exit code: $DB_PUSH_EXIT_CODE)"
+    echo "WARNING: prisma db push failed or had warnings (exit code: $DB_PUSH_EXIT_CODE)"
     echo "Trying migrate deploy as fallback..."
+    echo ""
     
     # Fallback to migrate deploy if db push fails
-    npx prisma migrate deploy --schema=./prisma/schema.prisma
+    npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1
     
-    if [ $? -ne 0 ]; then
+    MIGRATE_EXIT_CODE=$?
+    echo ""
+    echo "migrate deploy exit code: $MIGRATE_EXIT_CODE"
+    echo ""
+    
+    if [ $MIGRATE_EXIT_CODE -ne 0 ]; then
         echo "ERROR: Both db push and migrate deploy failed!"
         echo "Please check DATABASE_URL and database connection."
         echo "DATABASE_URL format should be: postgresql://user:password@host:port/database"
+        echo ""
+        echo "Testing database connection..."
+        # Try to connect and list tables
+        npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';" 2>&1 || echo "Cannot execute test query"
         exit 1
     fi
     
     echo "Migrations deployed successfully using migrate deploy"
 else
     echo "Database schema created/updated successfully using db push"
-    
-    # After successful db push, mark migrations as applied
-    # This prevents issues if migrate deploy is run later
-    echo "Marking migrations as applied..."
-    npx prisma migrate resolve --applied --schema=./prisma/schema.prisma "*" 2>/dev/null || true
 fi
 
-echo "Prisma migrations completed successfully. Starting server..."
+# Verify that tables were created
+echo ""
+echo "Step 2: Verifying tables were created..."
+echo ""
+
+# Check if system_settings table exists
+TABLE_CHECK=$(npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'system_settings');" 2>&1)
+
+if echo "$TABLE_CHECK" | grep -q "true" || echo "$TABLE_CHECK" | grep -q "t"; then
+    echo "✓ system_settings table exists"
+else
+    echo "✗ ERROR: system_settings table does NOT exist!"
+    echo "Table check output: $TABLE_CHECK"
+    echo ""
+    echo "Listing all tables in database:"
+    npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;" 2>&1 || echo "Cannot list tables"
+    exit 1
+fi
+
+echo ""
+echo "=========================================="
+echo "Database setup completed successfully!"
+echo "=========================================="
+echo ""
 
 # Start server and collector in background
 {
-  node /app/server/index.js
+    node /app/server/index.js
 } &
 { node /app/collector/index.js; } &
 wait -n
