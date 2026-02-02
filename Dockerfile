@@ -49,6 +49,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
 FROM --platform=$BUILDPLATFORM node:18-slim AS frontend-build
 WORKDIR /app/frontend
 COPY ./frontend/package.json ./frontend/yarn.lock ./
+# Install dependencies (warnings are non-critical)
 RUN yarn install --network-timeout 100000 && yarn cache clean
 COPY ./frontend/ ./
 RUN yarn build
@@ -60,11 +61,13 @@ USER anythingllm
 WORKDIR /app
 COPY --chown=anythingllm:anythingllm ./server /app/server/
 WORKDIR /app/server
+# Install dependencies (warnings about form-data and @datastax/astra-db-ts are non-critical)
 RUN yarn install --production --network-timeout 100000 && yarn cache clean
 WORKDIR /app
 COPY --chown=anythingllm:anythingllm ./collector/ ./collector/
 WORKDIR /app/collector
 ENV PUPPETEER_DOWNLOAD_BASE_URL=https://storage.googleapis.com/chrome-for-testing-public
+# Install dependencies (warnings are non-critical)
 RUN yarn install --production --network-timeout 100000 && yarn cache clean
 WORKDIR /app
 
