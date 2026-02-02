@@ -33,6 +33,55 @@ if [ -z "$DATABASE_URL" ]; then
     exit 1
 fi
 
+# Create database if it doesn't exist (for PostgreSQL)
+# DATABASE_URL format: postgresql://user:password@host:port/database
+if echo "$DATABASE_URL" | grep -q "postgresql://"; then
+    echo "=========================================="
+    echo "Ensuring PostgreSQL database exists..."
+    echo "=========================================="
+    
+    # Use Node.js to create database if it doesn't exist
+    cd /app/server/
+    node -e "
+    const { Client } = require('pg');
+    const url = require('url');
+    
+    const dbUrl = process.env.DATABASE_URL;
+    const parsed = url.parse(dbUrl);
+    const dbName = parsed.pathname?.slice(1)?.split('?')[0];
+    
+    // Connect to postgres database to create our database
+    const adminUrl = dbUrl.replace('/' + dbName, '/postgres');
+    const adminClient = new Client({ connectionString: adminUrl });
+    
+    adminClient.connect()
+      .then(() => {
+        console.log('Connected to PostgreSQL server');
+        return adminClient.query('SELECT 1 FROM pg_database WHERE datname = \$1', [dbName]);
+      })
+      .then(result => {
+        if (result.rows.length === 0) {
+          console.log('Database \"' + dbName + '\" does not exist, creating...');
+          return adminClient.query('CREATE DATABASE \"' + dbName.replace(/\"/g, '\"\"') + '\"');
+        } else {
+          console.log('Database \"' + dbName + '\" already exists');
+        }
+      })
+      .then(() => {
+        adminClient.end();
+        console.log('Database check completed');
+        process.exit(0);
+      })
+      .catch(err => {
+        console.log('Database check warning:', err.message);
+        // Continue even if database creation fails (might already exist or have permission issues)
+        adminClient.end().catch(() => {});
+        process.exit(0);
+      });
+    " 2>&1 || echo "Note: Database will be created by Prisma if needed"
+    echo ""
+fi
+
 # Run Prisma migrations synchronously before starting the server
 cd /app/server/
 
@@ -67,9 +116,11 @@ echo "Step 1: Pushing schema to database using prisma db push..."
 echo "Command: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate --force-reset"
 echo ""
 
-# Use --force-reset to ensure clean state, but this will delete existing data
-# For production, we might want to remove --force-reset
-npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate --force-reset 2>&1
+# Use db push to create/update schema
+# --accept-data-loss: allows schema changes that might cause data loss
+# --skip-generate: skip generating Prisma Client (already done above)
+# Note: We don't use --force-reset to avoid deleting existing data
+npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate 2>&1
 
 DB_PUSH_EXIT_CODE=$?
 
