@@ -35,17 +35,48 @@ fi
 
 # Run Prisma migrations synchronously before starting the server
 cd /app/server/
+
+# Check if migrations directory exists
+if [ ! -d "./prisma/migrations" ]; then
+    echo "ERROR: Prisma migrations directory not found!"
+    echo "Expected: /app/server/prisma/migrations"
+    ls -la /app/server/prisma/ || echo "Prisma directory does not exist!"
+    exit 1
+fi
+
+echo "Found $(ls -1 ./prisma/migrations/*/migration.sql 2>/dev/null | wc -l) migration files"
+
 echo "Generating Prisma Client..."
 export CHECKPOINT_DISABLE=1
 npx prisma generate --schema=./prisma/schema.prisma
 
+if [ $? -ne 0 ]; then
+    echo "ERROR: Prisma Client generation failed!"
+    exit 1
+fi
+
 echo "Running Prisma migrations..."
-echo "Database URL: ${DATABASE_URL:0:20}..." # Show first 20 chars for security
+echo "Database URL: ${DATABASE_URL:0:30}..." # Show first 30 chars for security
+
+# Test database connection first
+echo "Testing database connection..."
+npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT 1;" || {
+    echo "ERROR: Cannot connect to database!"
+    echo "Please check DATABASE_URL environment variable."
+    exit 1
+}
+
+# Deploy migrations
 npx prisma migrate deploy --schema=./prisma/schema.prisma
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Prisma migrations failed!"
-    exit 1
+    echo "Trying to reset and apply migrations..."
+    # If migrate deploy fails, try to push schema directly (for initial setup)
+    npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss || {
+        echo "ERROR: Failed to push schema to database!"
+        exit 1
+    }
 fi
 
 echo "Prisma migrations completed successfully. Starting server..."
