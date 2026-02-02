@@ -12,7 +12,7 @@
    - Railway автоматически создаст переменную `DATABASE_URL`
 
 2. **Запустите скрипт настройки:**
-   
+
    Через Railway CLI:
    ```bash
    railway run node scripts/setup-railway-db.cjs
@@ -21,7 +21,7 @@
    ```bash
    railway run yarn railway:setup-db
    ```
-   
+
    Или через веб-интерфейс Railway:
    - Откройте ваш сервис приложения
    - Перейдите в "Deployments" → выберите последний деплой
@@ -77,9 +77,9 @@ npx prisma db pull --schema=./prisma/schema.prisma
 
 Выполните SQL запрос через Railway PostgreSQL:
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 

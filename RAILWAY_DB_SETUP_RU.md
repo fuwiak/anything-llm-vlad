@@ -4,7 +4,18 @@
 
 Если вы не можете войти в систему, скорее всего база данных не настроена.
 
-## Решение (3 шага)
+## ⚠️ ВАЖНО: Где запускать команды
+
+**Переменные Railway доступны только:**
+- В Railway Shell (веб-интерфейс) ✅
+- Через `railway run` команду ✅
+- Внутри контейнеров Railway ✅
+
+**НЕ работают:**
+- Локально без `railway run` ❌
+- В обычном терминале без Railway окружения ❌
+
+## Решение (2 шага)
 
 ### Шаг 1: Добавьте PostgreSQL в Railway
 
@@ -12,7 +23,21 @@
 2. Нажмите **"+ New"** → выберите **"Database"** → выберите **"PostgreSQL"**
 3. Railway автоматически создаст переменную `DATABASE_URL`
 
-### Шаг 2: Запустите скрипт настройки
+### Шаг 2: Перезапустите деплой (таблицы создадутся автоматически!)
+
+**⭐ Таблицы создаются автоматически при запуске Docker контейнера!**
+
+1. В Railway Dashboard нажмите **"Redeploy"** на вашем сервисе
+2. Дождитесь завершения деплоя
+3. Проверьте логи - вы должны увидеть:
+   ```
+   Setting up PostgreSQL database and tables...
+   ✓ Database "railway" created successfully
+   ✓ Tables created successfully
+   Database schema created/updated successfully
+   ```
+
+**Если таблицы не создались автоматически, используйте ручную настройку:**
 
 #### ⭐ Вариант B: Через веб-интерфейс Railway (РЕКОМЕНДУЕТСЯ)
 
@@ -38,45 +63,28 @@
 
    **Важно:** В Railway Shell переменная `DATABASE_URL` будет автоматически доступна, и внутренние адреса (`postgres.railway.internal`) работают корректно.
 
-   **Примечание:** Файл скрипта имеет расширение `.cjs` для совместимости с ES модулями.
+#### Вариант A: Через Railway CLI (требует TCP Proxy)
 
-#### Вариант A: Через Railway CLI (НЕ РЕКОМЕНДУЕТСЯ для локального запуска)
+**⚠️ ВАЖНО:** Для работы через `railway run` нужно включить TCP Proxy для PostgreSQL:
 
-**⚠️ Внимание:** При локальном запуске через `railway run` могут возникнуть проблемы с подключением к базе данных, так как внутренние адреса Railway (`postgres.railway.internal`) недоступны локально.
+1. Railway Dashboard → ваш PostgreSQL сервис
+2. Перейдите в **Settings** → **TCP Proxy**
+3. Включите TCP Proxy
+4. Запишите публичный адрес (например, `proxy.railway.app:5432`)
 
-**Если все же хотите использовать CLI:**
-1. Сначала подключите проект:
-   ```bash
-   railway link
-   ```
-   Выберите ваш проект из списка.
-
-2. Получите публичный URL базы данных:
-   - Railway Dashboard → PostgreSQL сервис → вкладка "Connect"
-   - Используйте PUBLIC_URL вместо внутреннего адреса
-
-3. Запустите скрипт:
-   ```bash
-   railway run node scripts/setup-railway-db.cjs
-   ```
-
-**Рекомендация:** Используйте **Вариант B** (Railway Shell) - там все работает автоматически без дополнительных настроек.
-
-#### Вариант C: Через PostgreSQL Query в Railway
-
-Если скрипт не работает, можно создать базу данных вручную:
-
-1. В Railway Dashboard откройте ваш **PostgreSQL сервис**
-2. Перейдите на вкладку **"Data"** или **"Query"**
-3. База данных уже должна быть создана автоматически
-4. Теперь нужно только применить схему Prisma
-
-Для применения схемы используйте **Вариант B** (через Shell) и выполните:
+**Затем используйте:**
 ```bash
-cd server
-npx prisma generate --schema=./prisma/schema.prisma
-npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate
+railway link  # если еще не подключено
+railway run node scripts/setup-railway-db.cjs
 ```
+
+или
+
+```bash
+railway run bash scripts/setup-db-manual.sh
+```
+
+**⚠️ Внимание:** Без TCP Proxy внутренние адреса Railway (`postgres.railway.internal`) недоступны локально. **Рекомендуется использовать Вариант B** (Railway Shell) - там все работает автоматически.
 
 ### Шаг 3: Перезапустите приложение
 
@@ -93,6 +101,27 @@ npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-gen
 
 ## Если что-то пошло не так
 
+### Ошибка: "Environment variable not found: DATABASE_URL"
+
+**Проблема:** Вы запускаете команду локально без Railway окружения.
+
+**Решение:**
+1. **Используйте Railway Shell (веб-интерфейс) - РЕКОМЕНДУЕТСЯ:**
+   - Откройте Railway Dashboard → ваш сервис приложения
+   - Откройте Shell
+   - Выполните команду там - переменные будут доступны автоматически
+
+2. **Или используйте `railway run`:**
+   ```bash
+   railway run npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss
+   ```
+
+3. **Или экспортируйте переменную локально (для тестирования):**
+   ```bash
+   export DATABASE_URL="postgresql://postgres:password@host:5432/railway"
+   npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss
+   ```
+
 ### Ошибка: "No linked project found"
 
 **Решение:**
@@ -104,13 +133,8 @@ npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-gen
 **Решение:**
 - **Если запускаете локально:** Переменные Railway доступны только через `railway run` или в Railway Shell
 - **Используйте один из способов:**
-  1. Через Railway CLI: `railway run node scripts/setup-railway-db.cjs` (рекомендуется)
+  1. Через Railway CLI: `railway run node scripts/setup-railway-db.cjs`
   2. Через веб-интерфейс Railway Shell (Вариант B) - переменные будут доступны автоматически
-  3. Или временно экспортируйте переменную локально для тестирования:
-     ```bash
-     export DATABASE_URL="postgresql://user:password@host:port/database"
-     node scripts/setup-railway-db.cjs
-     ```
 - Убедитесь, что PostgreSQL сервис добавлен в Railway и переменная `DATABASE_URL` установлена в Railway variables
 
 ### Ошибка: "Can't reach database server at `postgres.railway.internal`"
