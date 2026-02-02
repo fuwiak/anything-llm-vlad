@@ -58,25 +58,29 @@ fi
 echo "Running Prisma migrations..."
 echo "Database URL: ${DATABASE_URL:0:30}..." # Show first 30 chars for security
 
-# Test database connection first
-echo "Testing database connection..."
-npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT 1;" || {
-    echo "ERROR: Cannot connect to database!"
-    echo "Please check DATABASE_URL environment variable."
-    exit 1
-}
-
 # Deploy migrations
+echo "Executing: npx prisma migrate deploy --schema=./prisma/schema.prisma"
 npx prisma migrate deploy --schema=./prisma/schema.prisma
 
-if [ $? -ne 0 ]; then
-    echo "ERROR: Prisma migrations failed!"
-    echo "Trying to reset and apply migrations..."
-    # If migrate deploy fails, try to push schema directly (for initial setup)
-    npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss || {
-        echo "ERROR: Failed to push schema to database!"
+MIGRATE_EXIT_CODE=$?
+
+if [ $MIGRATE_EXIT_CODE -ne 0 ]; then
+    echo "WARNING: prisma migrate deploy failed (exit code: $MIGRATE_EXIT_CODE)"
+    echo "This might be normal for a fresh database. Trying db push as fallback..."
+    
+    # If migrate deploy fails (e.g., no migrations table exists), use db push
+    # This will create the schema from scratch
+    npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate
+    
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Both migrate deploy and db push failed!"
+        echo "Please check DATABASE_URL and database connection."
         exit 1
-    }
+    fi
+    
+    echo "Database schema created successfully using db push"
+else
+    echo "Migrations deployed successfully"
 fi
 
 echo "Prisma migrations completed successfully. Starting server..."
