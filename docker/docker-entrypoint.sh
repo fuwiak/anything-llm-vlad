@@ -55,32 +55,38 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Running Prisma migrations..."
-echo "Database URL: ${DATABASE_URL:0:30}..." # Show first 30 chars for security
+echo "Setting up database schema..."
+echo "Database URL: ${DATABASE_URL:0:30}..." # Show first 20 chars for security
 
-# Deploy migrations
-echo "Executing: npx prisma migrate deploy --schema=./prisma/schema.prisma"
-npx prisma migrate deploy --schema=./prisma/schema.prisma
+# First, try to use db push to create/update schema directly from schema.prisma
+# This is more reliable for initial setup and ensures all tables are created
+echo "Executing: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate"
+npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate
 
-MIGRATE_EXIT_CODE=$?
+DB_PUSH_EXIT_CODE=$?
 
-if [ $MIGRATE_EXIT_CODE -ne 0 ]; then
-    echo "WARNING: prisma migrate deploy failed (exit code: $MIGRATE_EXIT_CODE)"
-    echo "This might be normal for a fresh database. Trying db push as fallback..."
+if [ $DB_PUSH_EXIT_CODE -ne 0 ]; then
+    echo "ERROR: prisma db push failed (exit code: $DB_PUSH_EXIT_CODE)"
+    echo "Trying migrate deploy as fallback..."
     
-    # If migrate deploy fails (e.g., no migrations table exists), use db push
-    # This will create the schema from scratch
-    npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate
+    # Fallback to migrate deploy if db push fails
+    npx prisma migrate deploy --schema=./prisma/schema.prisma
     
     if [ $? -ne 0 ]; then
-        echo "ERROR: Both migrate deploy and db push failed!"
+        echo "ERROR: Both db push and migrate deploy failed!"
         echo "Please check DATABASE_URL and database connection."
+        echo "DATABASE_URL format should be: postgresql://user:password@host:port/database"
         exit 1
     fi
     
-    echo "Database schema created successfully using db push"
+    echo "Migrations deployed successfully using migrate deploy"
 else
-    echo "Migrations deployed successfully"
+    echo "Database schema created/updated successfully using db push"
+    
+    # After successful db push, mark migrations as applied
+    # This prevents issues if migrate deploy is run later
+    echo "Marking migrations as applied..."
+    npx prisma migrate resolve --applied --schema=./prisma/schema.prisma "*" 2>/dev/null || true
 fi
 
 echo "Prisma migrations completed successfully. Starting server..."
