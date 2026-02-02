@@ -80,8 +80,8 @@ Railway автоматически:
 - `railway.json` - конфигурация Railway (JSON формат) - использует Dockerfile builder
 - `railway.toml` - конфигурация Railway (TOML формат) - использует Dockerfile builder
 - `docker/Dockerfile` - Dockerfile для сборки образа (используется Railway)
+- `docker/docker-entrypoint.sh` - скрипт запуска сервера и collector (используется через ENTRYPOINT)
 - `nixpacks.toml` - альтернативная конфигурация для NIXPACKS builder (если нужно)
-- `Procfile` - определение процессов для запуска
 - `package.json` - содержит скрипты `build` и `start`
 
 ## Скрипты сборки
@@ -93,6 +93,9 @@ Railway автоматически:
 
 ### Ошибка "yarn: not found" при сборке
 **Решение**: Конфигурация обновлена для использования Dockerfile вместо NIXPACKS. Dockerfile уже содержит установку yarn. Убедитесь, что в `railway.json` указан `"builder": "DOCKERFILE"`.
+
+### Ошибка "Couldn't find a package.json file in /app" при запуске
+**Решение**: Procfile был удален, так как он конфликтовал с ENTRYPOINT из Dockerfile. Теперь Railway использует `docker-entrypoint.sh`, который правильно запускает сервер из `/app/server/` и collector из `/app/collector/`.
 
 ### Ошибки при сборке
 - Проверьте, что все зависимости установлены
