@@ -66,9 +66,10 @@ git push
 ### 5. Деплой
 
 Railway автоматически:
-1. Определит Node.js проект
-2. Запустит `yarn build` (соберет фронтенд)
-3. Запустит `yarn start` (запустит сервер)
+1. Использует Dockerfile из папки `docker/` для сборки
+2. Устанавливает все зависимости (включая yarn)
+3. Собирает фронтенд и бэкенд
+4. Запускает сервер через Docker entrypoint
 
 ### 6. Проверка деплоя
 
@@ -76,8 +77,10 @@ Railway автоматически:
 
 ## Структура файлов для Railway
 
-- `railway.json` - конфигурация Railway (JSON формат)
-- `railway.toml` - конфигурация Railway (TOML формат)
+- `railway.json` - конфигурация Railway (JSON формат) - использует Dockerfile builder
+- `railway.toml` - конфигурация Railway (TOML формат) - использует Dockerfile builder
+- `docker/Dockerfile` - Dockerfile для сборки образа (используется Railway)
+- `nixpacks.toml` - альтернативная конфигурация для NIXPACKS builder (если нужно)
 - `Procfile` - определение процессов для запуска
 - `package.json` - содержит скрипты `build` и `start`
 
@@ -88,9 +91,13 @@ Railway автоматически:
 
 ## Решение проблем
 
+### Ошибка "yarn: not found" при сборке
+**Решение**: Конфигурация обновлена для использования Dockerfile вместо NIXPACKS. Dockerfile уже содержит установку yarn. Убедитесь, что в `railway.json` указан `"builder": "DOCKERFILE"`.
+
 ### Ошибки при сборке
 - Проверьте, что все зависимости установлены
 - Убедитесь, что Node.js версия >= 18
+- Проверьте, что Dockerfile находится в папке `docker/Dockerfile`
 
 ### Ошибки базы данных
 - Проверьте переменные окружения
