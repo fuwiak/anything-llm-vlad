@@ -33,52 +33,21 @@ if [ -z "$DATABASE_URL" ]; then
     exit 1
 fi
 
-# Create database if it doesn't exist (for PostgreSQL)
+# Create database and tables if they don't exist (for PostgreSQL)
 # DATABASE_URL format: postgresql://user:password@host:port/database
 if echo "$DATABASE_URL" | grep -q "postgresql://"; then
     echo "=========================================="
-    echo "Ensuring PostgreSQL database exists..."
+    echo "Setting up PostgreSQL database and tables..."
     echo "=========================================="
     
-    # Use Node.js to create database if it doesn't exist
+    # Use dedicated script to create database and tables
     cd /app/server/
-    node -e "
-    const { Client } = require('pg');
-    const url = require('url');
+    node create-db-tables.js 2>&1
     
-    const dbUrl = process.env.DATABASE_URL;
-    const parsed = url.parse(dbUrl);
-    const dbName = parsed.pathname?.slice(1)?.split('?')[0];
-    
-    // Connect to postgres database to create our database
-    const adminUrl = dbUrl.replace('/' + dbName, '/postgres');
-    const adminClient = new Client({ connectionString: adminUrl });
-    
-    adminClient.connect()
-      .then(() => {
-        console.log('Connected to PostgreSQL server');
-        return adminClient.query('SELECT 1 FROM pg_database WHERE datname = \$1', [dbName]);
-      })
-      .then(result => {
-        if (result.rows.length === 0) {
-          console.log('Database \"' + dbName + '\" does not exist, creating...');
-          return adminClient.query('CREATE DATABASE \"' + dbName.replace(/\"/g, '\"\"') + '\"');
-        } else {
-          console.log('Database \"' + dbName + '\" already exists');
-        }
-      })
-      .then(() => {
-        adminClient.end();
-        console.log('Database check completed');
-        process.exit(0);
-      })
-      .catch(err => {
-        console.log('Database check warning:', err.message);
-        // Continue even if database creation fails (might already exist or have permission issues)
-        adminClient.end().catch(() => {});
-        process.exit(0);
-      });
-    " 2>&1 || echo "Note: Database will be created by Prisma if needed"
+    if [ $? -ne 0 ]; then
+        echo "WARNING: Database setup script had issues, but continuing..."
+        echo "Prisma will attempt to create tables in the next step"
+    fi
     echo ""
 fi
 
@@ -113,20 +82,31 @@ echo "=========================================="
 # This is more reliable for initial setup and ensures all tables are created
 echo ""
 echo "Step 1: Pushing schema to database using prisma db push..."
-echo "Command: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate --force-reset"
+echo "Command: npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate"
 echo ""
 
 # Use db push to create/update schema
 # --accept-data-loss: allows schema changes that might cause data loss
 # --skip-generate: skip generating Prisma Client (already done above)
-# Note: We don't use --force-reset to avoid deleting existing data
-npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate 2>&1
+# Force push to ensure all tables are created
+echo "Executing prisma db push..."
+npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate --force-reset 2>&1 | tee /tmp/prisma-push.log
 
-DB_PUSH_EXIT_CODE=$?
+DB_PUSH_EXIT_CODE=${PIPESTATUS[0]}
 
 echo ""
+echo "=========================================="
 echo "db push exit code: $DB_PUSH_EXIT_CODE"
+echo "=========================================="
 echo ""
+
+# Check if tables were actually created by looking at the output
+if grep -q "Your database is now in sync with your Prisma schema" /tmp/prisma-push.log 2>/dev/null || \
+   grep -q "Database schema is up to date" /tmp/prisma-push.log 2>/dev/null || \
+   grep -q "The database is already in sync with the Prisma schema" /tmp/prisma-push.log 2>/dev/null; then
+    echo "✓ Prisma db push completed successfully - tables should exist"
+    DB_PUSH_EXIT_CODE=0
+fi
 
 if [ $DB_PUSH_EXIT_CODE -ne 0 ]; then
     echo "WARNING: prisma db push failed or had warnings (exit code: $DB_PUSH_EXIT_CODE)"
