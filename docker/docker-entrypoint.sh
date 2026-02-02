@@ -22,16 +22,32 @@ mkdir -p /app/server/storage
 
 # Set DATABASE_URL if not provided (default to SQLite for local development)
 # For Railway/production, DATABASE_URL should be set automatically when PostgreSQL plugin is added
-if [ -z "$DATABASE_URL" ]; then
-    echo "DATABASE_URL not set, using SQLite database..."
-    export DATABASE_URL="file:../storage/anythingllm.db"
-    # For SQLite, we need to use a different schema file or handle it differently
-    # Since schema.prisma now uses PostgreSQL, we'll need to handle SQLite separately
-    # For now, we'll require DATABASE_URL to be set
-    echo "ERROR: DATABASE_URL must be set. Please add PostgreSQL plugin in Railway or set DATABASE_URL environment variable."
-    echo "For Railway: Add PostgreSQL plugin in your Railway project settings."
-    exit 1
+# Railway automatically sets DATABASE_URL when PostgreSQL service is added
+if [ -z "$DATABASE_URL" ] || [ "$DATABASE_URL" = "\${{Postgres.DATABASE_URL}}" ] || [ "$DATABASE_URL" = '${{Postgres.DATABASE_URL}}' ]; then
+    echo "=========================================="
+    echo "DATABASE_URL check..."
+    echo "=========================================="
+    echo "DATABASE_URL value: ${DATABASE_URL:0:50}..."
+    
+    # Try to get DATABASE_URL from Railway's PostgreSQL service
+    # Railway sets this automatically, but sometimes it needs to be referenced
+    if [ -z "$DATABASE_URL" ] || [ "$DATABASE_URL" = "\${{Postgres.DATABASE_URL}}" ] || [ "$DATABASE_URL" = '${{Postgres.DATABASE_URL}}' ]; then
+        echo "ERROR: DATABASE_URL is not set or is a template variable!"
+        echo ""
+        echo "In Railway:"
+        echo "1. Make sure you have added PostgreSQL service to your project"
+        echo "2. Railway should automatically set DATABASE_URL"
+        echo "3. Check your service settings - DATABASE_URL should be automatically available"
+        echo "4. If using Railway CLI, the variable should be: \${{Postgres.DATABASE_URL}}"
+        echo ""
+        echo "If DATABASE_URL is not automatically set, you may need to:"
+        echo "- Check that PostgreSQL service is properly connected to your app"
+        echo "- Restart the deployment"
+        exit 1
+    fi
 fi
+
+echo "DATABASE_URL is set: ${DATABASE_URL:0:30}..."
 
 # Create database and tables if they don't exist (for PostgreSQL)
 # DATABASE_URL format: postgresql://user:password@host:port/database
@@ -39,11 +55,11 @@ if echo "$DATABASE_URL" | grep -q "postgresql://"; then
     echo "=========================================="
     echo "Setting up PostgreSQL database and tables..."
     echo "=========================================="
-    
+
     # Use dedicated script to create database and tables
     cd /app/server/
     node create-db-tables.js 2>&1
-    
+
     if [ $? -ne 0 ]; then
         echo "WARNING: Database setup script had issues, but continuing..."
         echo "Prisma will attempt to create tables in the next step"
@@ -112,15 +128,15 @@ if [ $DB_PUSH_EXIT_CODE -ne 0 ]; then
     echo "WARNING: prisma db push failed or had warnings (exit code: $DB_PUSH_EXIT_CODE)"
     echo "Trying migrate deploy as fallback..."
     echo ""
-    
+
     # Fallback to migrate deploy if db push fails
     npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1
-    
+
     MIGRATE_EXIT_CODE=$?
     echo ""
     echo "migrate deploy exit code: $MIGRATE_EXIT_CODE"
     echo ""
-    
+
     if [ $MIGRATE_EXIT_CODE -ne 0 ]; then
         echo "ERROR: Both db push and migrate deploy failed!"
         echo "Please check DATABASE_URL and database connection."
@@ -131,7 +147,7 @@ if [ $DB_PUSH_EXIT_CODE -ne 0 ]; then
         npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';" 2>&1 || echo "Cannot execute test query"
         exit 1
     fi
-    
+
     echo "Migrations deployed successfully using migrate deploy"
 else
     echo "Database schema created/updated successfully using db push"

@@ -3,9 +3,22 @@ const { Client } = require('pg');
 const url = require('url');
 
 async function setupDatabase() {
-  const dbUrl = process.env.DATABASE_URL;
+  let dbUrl = process.env.DATABASE_URL;
   
-  if (!dbUrl || !dbUrl.includes('postgresql://')) {
+  // Check if DATABASE_URL is a template variable (Railway)
+  if (!dbUrl || dbUrl.includes('{{') || dbUrl.includes('${{')) {
+    console.error('ERROR: DATABASE_URL appears to be a template variable or is not set!');
+    console.error('DATABASE_URL value:', dbUrl || '(not set)');
+    console.error('');
+    console.error('In Railway:');
+    console.error('1. Make sure PostgreSQL service is added to your project');
+    console.error('2. Railway should automatically provide DATABASE_URL');
+    console.error('3. Check service variables in Railway dashboard');
+    console.error('4. The variable should be automatically linked, not a template');
+    process.exit(1);
+  }
+  
+  if (!dbUrl.includes('postgresql://')) {
     console.log('DATABASE_URL is not a PostgreSQL connection string, skipping database setup');
     return;
   }
