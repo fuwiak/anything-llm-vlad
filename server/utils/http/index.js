@@ -2,6 +2,7 @@ process.env.NODE_ENV === "development"
   ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
   : require("dotenv").config();
 const JWT = require("jsonwebtoken");
+const { v4 } = require("uuid");
 const { User } = require("../../models/user");
 const { jsonrepair } = require("jsonrepair");
 const extract = require("extract-json-from-string");
@@ -23,8 +24,10 @@ function queryParams(request) {
  * @returns {string} The JWT
  */
 function makeJWT(info = {}, expiry = "30d") {
-  if (!process.env.JWT_SECRET)
-    throw new Error("Cannot create JWT as JWT_SECRET is unset.");
+  // Auto-generate JWT_SECRET if not set (for development or first-time setup)
+  if (!process.env.JWT_SECRET) {
+    process.env.JWT_SECRET = v4();
+  }
   return JWT.sign(info, process.env.JWT_SECRET, { expiresIn: expiry });
 }
 
@@ -53,6 +56,10 @@ async function userFromSession(request, response = null) {
 
 function decodeJWT(jwtToken) {
   try {
+    // Use JWT_SECRET if set, otherwise return invalid token
+    if (!process.env.JWT_SECRET) {
+      return { p: null, id: null, username: null };
+    }
     return JWT.verify(jwtToken, process.env.JWT_SECRET);
   } catch {}
   return { p: null, id: null, username: null };
