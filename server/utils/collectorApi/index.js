@@ -30,7 +30,13 @@ class CollectorApi {
     const collectorHost = process.env.NODE_ENV === "production" || process.env.ANYTHING_LLM_RUNTIME === "docker" 
       ? "localhost" 
       : "0.0.0.0";
-    this.endpoint = `http://${collectorHost}:${process.env.COLLECTOR_PORT || 8888}`;
+    const collectorPort = process.env.COLLECTOR_PORT || 8888;
+    this.endpoint = `http://${collectorHost}:${collectorPort}`;
+    
+    this.log(`CollectorApi initialized`);
+    this.log(`  Endpoint: ${this.endpoint}`);
+    this.log(`  Host: ${collectorHost} (NODE_ENV=${process.env.NODE_ENV}, RUNTIME=${process.env.ANYTHING_LLM_RUNTIME})`);
+    this.log(`  Port: ${collectorPort} (COLLECTOR_PORT=${process.env.COLLECTOR_PORT || 'default'})`);
   }
 
   log(text, ...args) {
@@ -67,18 +73,44 @@ class CollectorApi {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 5000);
 
+    this.log(`Checking collector health at: ${this.endpoint}`);
+    this.log(`Environment: NODE_ENV=${process.env.NODE_ENV}, RUNTIME=${process.env.ANYTHING_LLM_RUNTIME}`);
+    
     try {
+      const startTime = Date.now();
       const res = await fetch(this.endpoint, {
         dispatcher: healthCheckAgent,
         signal: abortController.signal,
       });
+      const duration = Date.now() - startTime;
       clearTimeout(timeoutId);
-      return res.ok;
+      
+      this.log(`Collector health check response: ${res.status} ${res.statusText} (${duration}ms)`);
+      
+      if (res.ok) {
+        this.log(`✓ Collector is online and responding`);
+        return true;
+      } else {
+        this.log(`✗ Collector returned non-OK status: ${res.status} ${res.statusText}`);
+        return false;
+      }
     } catch (error) {
       clearTimeout(timeoutId);
-      // Log error for debugging but don't throw
+      const errorDetails = {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        cause: error.cause?.message || error.cause,
+      };
+      
       if (error.name !== 'AbortError') {
-        this.log(`Health check failed: ${error.message}`);
+        this.log(`✗ Health check failed: ${error.name} - ${error.message}`);
+        this.log(`  Error details:`, errorDetails);
+        this.log(`  Endpoint attempted: ${this.endpoint}`);
+        this.log(`  This usually means collector is not running or not accessible`);
+      } else {
+        this.log(`✗ Health check timed out after 5 seconds`);
+        this.log(`  Endpoint: ${this.endpoint}`);
       }
       return false;
     }

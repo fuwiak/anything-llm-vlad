@@ -178,40 +178,97 @@ echo "Starting collector and server..."
 echo "=========================================="
 
 COLLECTOR_PORT=${COLLECTOR_PORT:-8888}
+echo "[ENTRYPOINT] Collector port: ${COLLECTOR_PORT}"
+echo "[ENTRYPOINT] Server port: ${PORT:-3001}"
+echo "[ENTRYPOINT] NODE_ENV: ${NODE_ENV}"
+echo "[ENTRYPOINT] ANYTHING_LLM_RUNTIME: ${ANYTHING_LLM_RUNTIME}"
 
 # Start collector in background and wait for it to be ready
+echo "[ENTRYPOINT] Starting collector process..."
 {
-    echo "Starting collector on port ${COLLECTOR_PORT}..."
+    echo "[COLLECTOR] Starting collector on port ${COLLECTOR_PORT}..."
+    echo "[COLLECTOR] Working directory: $(pwd)"
+    echo "[COLLECTOR] Node version: $(node --version)"
     cd /app/collector
-    node index.js
+    echo "[COLLECTOR] Changed to: $(pwd)"
+    echo "[COLLECTOR] Starting node index.js..."
+    node index.js 2>&1 | sed 's/^/[COLLECTOR] /'
 } &
 COLLECTOR_PID=$!
+echo "[ENTRYPOINT] Collector process started with PID: ${COLLECTOR_PID}"
+
+# Wait a moment for collector to start
+sleep 2
 
 # Wait for collector to be ready (max 30 seconds)
-echo "Waiting for collector to be ready..."
+echo "[ENTRYPOINT] Waiting for collector to be ready (max 30 seconds)..."
+COLLECTOR_READY=false
 for i in {1..30}; do
-    # Try to connect to collector using netcat (more reliable than curl)
-    if nc -z localhost ${COLLECTOR_PORT} 2>/dev/null || curl -s http://localhost:${COLLECTOR_PORT}/ping > /dev/null 2>&1; then
-        echo "✓ Collector is ready on port ${COLLECTOR_PORT}"
-        break
-    fi
-    if [ $i -eq 30 ]; then
-        echo "✗ Collector failed to start after 30 seconds"
-        echo "Checking collector process..."
-        ps aux | grep -E "collector|node.*index.js" | grep -v grep || echo "No collector process found"
-        kill $COLLECTOR_PID 2>/dev/null
+    echo "[ENTRYPOINT] Attempt ${i}/30: Checking collector on localhost:${COLLECTOR_PORT}..."
+
+    # Check if process is still running
+    if ! kill -0 ${COLLECTOR_PID} 2>/dev/null; then
+        echo "[ENTRYPOINT] ✗ Collector process (PID ${COLLECTOR_PID}) is not running!"
+        echo "[ENTRYPOINT] Checking for any collector processes..."
+        ps aux | grep -E "collector|node.*index.js" | grep -v grep || echo "[ENTRYPOINT] No collector process found"
         exit 1
     fi
+
+    # Try netcat first (faster)
+    if nc -z localhost ${COLLECTOR_PORT} 2>/dev/null; then
+        echo "[ENTRYPOINT] ✓ Port ${COLLECTOR_PORT} is open (netcat check)"
+        # Try HTTP ping
+        if curl -s -f http://localhost:${COLLECTOR_PORT}/ping > /dev/null 2>&1; then
+            echo "[ENTRYPOINT] ✓ Collector HTTP endpoint responded successfully"
+            COLLECTOR_READY=true
+            break
+        else
+            echo "[ENTRYPOINT] ⚠ Port is open but HTTP endpoint not responding yet..."
+        fi
+    else
+        echo "[ENTRYPOINT] Port ${COLLECTOR_PORT} not open yet..."
+    fi
+
+    # Show collector process status every 5 attempts
+    if [ $((i % 5)) -eq 0 ]; then
+        echo "[ENTRYPOINT] Collector process status:"
+        ps aux | grep ${COLLECTOR_PID} | grep -v grep || echo "[ENTRYPOINT] Process not found in ps output"
+    fi
+
     sleep 1
 done
 
+if [ "$COLLECTOR_READY" = false ]; then
+    echo "[ENTRYPOINT] ✗ Collector failed to start after 30 seconds"
+    echo "[ENTRYPOINT] Collector PID: ${COLLECTOR_PID}"
+    echo "[ENTRYPOINT] Checking collector process..."
+    ps aux | grep -E "collector|node.*index.js" | grep -v grep || echo "[ENTRYPOINT] No collector process found"
+    echo "[ENTRYPOINT] Checking port ${COLLECTOR_PORT}..."
+    netstat -tuln 2>/dev/null | grep ${COLLECTOR_PORT} || ss -tuln 2>/dev/null | grep ${COLLECTOR_PORT} || echo "[ENTRYPOINT] Port ${COLLECTOR_PORT} not listening"
+    echo "[ENTRYPOINT] Attempting to get collector logs..."
+    kill -0 ${COLLECTOR_PID} 2>/dev/null && echo "[ENTRYPOINT] Process still exists" || echo "[ENTRYPOINT] Process has exited"
+    kill ${COLLECTOR_PID} 2>/dev/null
+    exit 1
+fi
+
+echo "[ENTRYPOINT] ✓ Collector is ready and responding on port ${COLLECTOR_PORT}"
+
 # Start server
+echo "[ENTRYPOINT] Starting server process..."
 {
-    echo "Starting server on port ${PORT:-3001}..."
+    echo "[SERVER] Starting server on port ${PORT:-3001}..."
+    echo "[SERVER] Working directory: $(pwd)"
+    echo "[SERVER] Node version: $(node --version)"
     cd /app/server
-    node index.js
+    echo "[SERVER] Changed to: $(pwd)"
+    echo "[SERVER] Starting node index.js..."
+    node index.js 2>&1 | sed 's/^/[SERVER] /'
 } &
 SERVER_PID=$!
+echo "[ENTRYPOINT] Server process started with PID: ${SERVER_PID}"
+echo "[ENTRYPOINT] Both processes are now running:"
+echo "[ENTRYPOINT]   - Collector PID: ${COLLECTOR_PID}"
+echo "[ENTRYPOINT]   - Server PID: ${SERVER_PID}"
 
 # Wait for either process to exit
 wait -n

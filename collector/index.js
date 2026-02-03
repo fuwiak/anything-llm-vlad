@@ -186,12 +186,34 @@ app.all("*", function (_, response) {
 });
 
 const collectorPort = process.env.COLLECTOR_PORT || 8888;
+console.log(`[COLLECTOR] Starting document processor...`);
+console.log(`[COLLECTOR] Port: ${collectorPort}`);
+console.log(`[COLLECTOR] NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`[COLLECTOR] Working directory: ${process.cwd()}`);
+console.log(`[COLLECTOR] Node version: ${process.version}`);
+
 app
   .listen(collectorPort, "0.0.0.0", async () => {
-    await wipeCollectorStorage();
-    console.log(`Document processor app listening on port ${collectorPort}`);
+    console.log(`[COLLECTOR] ✓ Server listening on 0.0.0.0:${collectorPort}`);
+    console.log(`[COLLECTOR] ✓ Document processor app listening on port ${collectorPort}`);
+    console.log(`[COLLECTOR] ✓ Ready to accept connections`);
+    try {
+      await wipeCollectorStorage();
+      console.log(`[COLLECTOR] ✓ Storage initialized`);
+    } catch (error) {
+      console.error(`[COLLECTOR] ✗ Error initializing storage:`, error.message);
+    }
   })
-  .on("error", function (_) {
+  .on("error", function (error) {
+    console.error(`[COLLECTOR] ✗ Error starting server:`, error.message);
+    console.error(`[COLLECTOR] Error code: ${error.code}`);
+    console.error(`[COLLECTOR] Error details:`, error);
+    
+    if (error.code === 'EADDRINUSE') {
+      console.error(`[COLLECTOR] Port ${collectorPort} is already in use!`);
+      console.error(`[COLLECTOR] Check if another collector instance is running`);
+    }
+    
     process.once("SIGUSR2", function () {
       process.kill(process.pid, "SIGUSR2");
     });
