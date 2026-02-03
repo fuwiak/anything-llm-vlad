@@ -145,6 +145,8 @@ export function DnDFileUploaderProvider({
     const { files = [] } = event.detail;
     if (!files.length) return;
     const newAccepted = [];
+    const nonImageFiles = [];
+    
     for (const file of files) {
       if (file.type.startsWith("image/")) {
         newAccepted.push({
@@ -156,6 +158,7 @@ export function DnDFileUploaderProvider({
           type: "attachment",
         });
       } else {
+        nonImageFiles.push(file);
         newAccepted.push({
           uid: v4(),
           file,
@@ -166,8 +169,32 @@ export function DnDFileUploaderProvider({
         });
       }
     }
+
+    // Check if processor is online for non-image files
+    if (nonImageFiles.length > 0 && !ready) {
+      const processorStatus = await System.checkDocumentProcessorOnline();
+      if (!processorStatus) {
+        // Mark non-image files as failed immediately
+        for (const attachment of newAccepted) {
+          if (attachment.type === "upload") {
+            attachment.status = "failed";
+            attachment.error = "Document processor is offline. Please try again later.";
+          }
+        }
+        showToast(
+          "Document processor is offline. Images can still be attached, but document processing is unavailable.",
+          "error"
+        );
+      }
+    }
+
     setFiles((prev) => [...prev, ...newAccepted]);
-    embedEligibleAttachments(newAccepted);
+    if (ready || nonImageFiles.length === 0) {
+      embedEligibleAttachments(newAccepted);
+    } else {
+      // If processor is offline, still dispatch processed event to unlock send button
+      window.dispatchEvent(new CustomEvent(ATTACHMENTS_PROCESSED_EVENT));
+    }
   }
 
   /**
@@ -180,6 +207,8 @@ export function DnDFileUploaderProvider({
 
     /** @type {Attachment[]} */
     const newAccepted = [];
+    const nonImageFiles = [];
+    
     for (const file of acceptedFiles) {
       if (file.type.startsWith("image/")) {
         newAccepted.push({
@@ -191,6 +220,7 @@ export function DnDFileUploaderProvider({
           type: "attachment",
         });
       } else {
+        nonImageFiles.push(file);
         newAccepted.push({
           uid: v4(),
           file,
@@ -202,8 +232,31 @@ export function DnDFileUploaderProvider({
       }
     }
 
+    // Check if processor is online for non-image files
+    if (nonImageFiles.length > 0 && !ready) {
+      const processorStatus = await System.checkDocumentProcessorOnline();
+      if (!processorStatus) {
+        // Mark non-image files as failed immediately
+        for (const attachment of newAccepted) {
+          if (attachment.type === "upload") {
+            attachment.status = "failed";
+            attachment.error = "Document processor is offline. Please try again later.";
+          }
+        }
+        showToast(
+          "Document processor is offline. Images can still be attached, but document processing is unavailable.",
+          "error"
+        );
+      }
+    }
+
     setFiles((prev) => [...prev, ...newAccepted]);
-    embedEligibleAttachments(newAccepted);
+    if (ready || nonImageFiles.length === 0) {
+      embedEligibleAttachments(newAccepted);
+    } else {
+      // If processor is offline, still dispatch processed event to unlock send button
+      window.dispatchEvent(new CustomEvent(ATTACHMENTS_PROCESSED_EVENT));
+    }
   }
 
   /**
@@ -423,7 +476,7 @@ export default function DnDFileUploaderWrapper({ children }) {
     useContext(DndUploaderContext);
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
-    disabled: !ready,
+    disabled: false, // Always allow file selection - images don't need processor
     noClick: true,
     noKeyboard: true,
     onDragEnter: () => setDragging(true),
