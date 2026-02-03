@@ -171,18 +171,52 @@ echo "Database setup completed successfully!"
 echo "=========================================="
 echo ""
 
-# Start server and collector in background
+# Start collector first, then server
 # Both processes run in the same container and communicate via localhost
 echo "=========================================="
-echo "Starting server and collector..."
+echo "Starting collector and server..."
 echo "=========================================="
+
+COLLECTOR_PORT=${COLLECTOR_PORT:-8888}
+
+# Start collector in background and wait for it to be ready
+{
+    echo "Starting collector on port ${COLLECTOR_PORT}..."
+    cd /app/collector
+    node index.js
+} &
+COLLECTOR_PID=$!
+
+# Wait for collector to be ready (max 30 seconds)
+echo "Waiting for collector to be ready..."
+for i in {1..30}; do
+    # Try to connect to collector using netcat (more reliable than curl)
+    if nc -z localhost ${COLLECTOR_PORT} 2>/dev/null || curl -s http://localhost:${COLLECTOR_PORT}/ping > /dev/null 2>&1; then
+        echo "✓ Collector is ready on port ${COLLECTOR_PORT}"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "✗ Collector failed to start after 30 seconds"
+        echo "Checking collector process..."
+        ps aux | grep -E "collector|node.*index.js" | grep -v grep || echo "No collector process found"
+        kill $COLLECTOR_PID 2>/dev/null
+        exit 1
+    fi
+    sleep 1
+done
+
+# Start server
 {
     echo "Starting server on port ${PORT:-3001}..."
-    node /app/server/index.js
+    cd /app/server
+    node index.js
 } &
-{ 
-    echo "Starting collector on port ${COLLECTOR_PORT:-8888}..."
-    node /app/collector/index.js
-} &
+SERVER_PID=$!
+
+# Wait for either process to exit
 wait -n
-exit $?
+EXIT_CODE=$?
+
+# If one process exits, kill the other
+kill $COLLECTOR_PID $SERVER_PID 2>/dev/null
+exit $EXIT_CODE

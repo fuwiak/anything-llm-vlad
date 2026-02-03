@@ -26,7 +26,11 @@ class CollectorApi {
   constructor() {
     const { CommunicationKey } = require("../comKey");
     this.comkey = new CommunicationKey();
-    this.endpoint = `http://0.0.0.0:${process.env.COLLECTOR_PORT || 8888}`;
+    // Use localhost for Docker/Railway (same container), 0.0.0.0 for local development
+    const collectorHost = process.env.NODE_ENV === "production" || process.env.ANYTHING_LLM_RUNTIME === "docker" 
+      ? "localhost" 
+      : "0.0.0.0";
+    this.endpoint = `http://${collectorHost}:${process.env.COLLECTOR_PORT || 8888}`;
   }
 
   log(text, ...args) {
