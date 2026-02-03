@@ -166,6 +166,11 @@ USER anythingllm
 # Since we are building from backend-build we just need to move built frontend into server/public
 FROM backend-build AS production-build
 WORKDIR /app
+
+# Copy root package.json to prevent Railway from auto-detecting start command
+# This is needed because Railway may try to run "yarn start" from root
+COPY --chown=anythingllm:anythingllm ./package.json /app/package.json
+
 COPY --chown=anythingllm:anythingllm --from=frontend-build /app/frontend/dist /app/server/public
 
 # Setup the environment
@@ -180,3 +185,4 @@ HEALTHCHECK --interval=1m --timeout=10s --start-period=1m \
 # Run the server
 # CMD ["sh", "-c", "tail -f /dev/null"] # For development: keep container open
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/docker-entrypoint.sh"]
+CMD []
