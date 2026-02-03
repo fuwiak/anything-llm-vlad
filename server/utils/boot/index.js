@@ -5,6 +5,7 @@ const { CommunicationKey } = require("../comKey");
 const setupTelemetry = require("../telemetry");
 const eagerLoadContextWindows = require("./eagerLoadContextWindows");
 const markOnboarded = require("./markOnboarded");
+const { startCollector } = require("./startCollector");
 
 // Testing SSL? You can make a self signed certificate and point the ENVs to that location
 // make a directory in server called 'sslcert' - cd into it
@@ -15,11 +16,23 @@ const markOnboarded = require("./markOnboarded");
 // Update .env keys with the correct values and boot. These are temporary and not real SSL certs - only use for local.
 // Test with https://localhost:3001/api/ping
 // build and copy frontend to server/public with correct API_BASE and start server in prod model and all should be ok
-function bootSSL(app, port = 3001) {
+async function bootSSL(app, port = 3001) {
   try {
     console.log(
       `\x1b[33m[SSL BOOT ENABLED]\x1b[0m Loading the certificate and key for HTTPS mode...`
     );
+
+    // Start collector first (in production/docker mode)
+    try {
+      await startCollector();
+    } catch (error) {
+      console.error(
+        "[Boot] Failed to start collector:",
+        error.message,
+        "- file uploads may not work"
+      );
+    }
+
     const fs = require("fs");
     const https = require("https");
     const privateKey = fs.readFileSync(process.env.HTTPS_KEY_PATH);
@@ -55,8 +68,20 @@ function bootSSL(app, port = 3001) {
   }
 }
 
-function bootHTTP(app, port = 3001) {
+async function bootHTTP(app, port = 3001) {
   if (!app) throw new Error('No "app" defined - crashing!');
+
+  // Start collector first (in production/docker mode)
+  // This ensures collector is available when server starts accepting requests
+  try {
+    await startCollector();
+  } catch (error) {
+    console.error(
+      "[Boot] Failed to start collector:",
+      error.message,
+      "- file uploads may not work"
+    );
+  }
 
   app
     .listen(port, async () => {
