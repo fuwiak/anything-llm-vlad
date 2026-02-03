@@ -76,6 +76,8 @@ EMBEDDING_ENGINE=inherit
 DISABLE_TELEMETRY=true
 
 # Порт для collector (по умолчанию 8888, обычно не нужно менять)
+# Важно: collector должен работать на порту 8888 внутри контейнера
+# Server подключается к collector через localhost:8888
 COLLECTOR_PORT=8888
 ```
 
@@ -119,12 +121,28 @@ Railway автоматически:
 
 **Решение**: Убедитесь, что вы добавили PostgreSQL сервис в проект Railway. Railway автоматически установит `DATABASE_URL`.
 
-### Ошибка "Document processing API is not online"
+### Ошибка "Процессор документов недоступен" / "Document processing API is not online"
 
-**Решение**: 
-- Проверьте логи в Railway Dashboard
-- Убедитесь, что collector запустился (должно быть сообщение "Document processor app listening on port 8888")
-- Проверьте, что `COLLECTOR_PORT=8888` установлен (или не установлен, тогда используется значение по умолчанию)
+**Решение**:
+1. **Проверьте логи в Railway Dashboard**:
+   - Откройте ваш сервис в Railway Dashboard
+   - Перейдите на вкладку "Deployments" → выберите последний деплой → "View Logs"
+   - Ищите сообщение: `"Document processor app listening on port 8888"` или `"Starting collector on port 8888..."`
+
+2. **Убедитесь, что collector запустился**:
+   - В логах должно быть два сообщения:
+     - `"Starting server on port XXXX..."`
+     - `"Starting collector on port 8888..."`
+   - Если collector не запустился, проверьте ошибки в логах
+
+3. **Проверьте переменные окружения**:
+   - `COLLECTOR_PORT=8888` (опционально, по умолчанию 8888)
+   - Убедитесь, что collector и server работают в одном контейнере
+
+4. **Если проблема сохраняется**:
+   - Перезапустите деплой в Railway
+   - Проверьте, что оба процесса (server и collector) запускаются одновременно
+   - Убедитесь, что нет конфликтов портов
 
 ### Ошибки при миграции базы данных
 

@@ -172,9 +172,17 @@ echo "=========================================="
 echo ""
 
 # Start server and collector in background
+# Both processes run in the same container and communicate via localhost
+echo "=========================================="
+echo "Starting server and collector..."
+echo "=========================================="
 {
+    echo "Starting server on port ${PORT:-3001}..."
     node /app/server/index.js
 } &
-{ node /app/collector/index.js; } &
+{ 
+    echo "Starting collector on port ${COLLECTOR_PORT:-8888}..."
+    node /app/collector/index.js
+} &
 wait -n
 exit $?
