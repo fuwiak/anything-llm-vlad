@@ -53,9 +53,31 @@ class CollectorApi {
   }
 
   async online() {
-    return await fetch(this.endpoint)
-      .then((res) => res.ok)
-      .catch(() => false);
+    // Use Agent with timeout for health check
+    const healthCheckAgent = new Agent({
+      headersTimeout: 5000, // 5 second timeout for health check
+      bodyTimeout: 5000,
+    });
+
+    // Create AbortController for timeout safety
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 5000);
+
+    try {
+      const res = await fetch(this.endpoint, {
+        dispatcher: healthCheckAgent,
+        signal: abortController.signal,
+      });
+      clearTimeout(timeoutId);
+      return res.ok;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      // Log error for debugging but don't throw
+      if (error.name !== 'AbortError') {
+        this.log(`Health check failed: ${error.message}`);
+      }
+      return false;
+    }
   }
 
   async acceptedFileTypes() {
