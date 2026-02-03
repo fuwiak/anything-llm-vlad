@@ -26,9 +26,10 @@ class CollectorApi {
   constructor() {
     const { CommunicationKey } = require("../comKey");
     this.comkey = new CommunicationKey();
-    // Use localhost for Docker/Railway (same container), 0.0.0.0 for local development
+    // Use 127.0.0.1 (IPv4) for Docker/Railway to avoid IPv6 resolution issues
+    // 0.0.0.0 is for binding, not for connecting - use 127.0.0.1 for connections
     const collectorHost = process.env.NODE_ENV === "production" || process.env.ANYTHING_LLM_RUNTIME === "docker" 
-      ? "localhost" 
+      ? "127.0.0.1"  // Use IPv4 explicitly to avoid IPv6 resolution issues
       : "0.0.0.0";
     const collectorPort = process.env.COLLECTOR_PORT || 8888;
     this.endpoint = `http://${collectorHost}:${collectorPort}`;
@@ -37,6 +38,7 @@ class CollectorApi {
     this.log(`  Endpoint: ${this.endpoint}`);
     this.log(`  Host: ${collectorHost} (NODE_ENV=${process.env.NODE_ENV}, RUNTIME=${process.env.ANYTHING_LLM_RUNTIME})`);
     this.log(`  Port: ${collectorPort} (COLLECTOR_PORT=${process.env.COLLECTOR_PORT || 'default'})`);
+    this.log(`  Note: Using 127.0.0.1 (IPv4) to avoid IPv6 resolution issues with localhost`);
   }
 
   log(text, ...args) {

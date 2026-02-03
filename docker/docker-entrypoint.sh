@@ -214,19 +214,26 @@ for i in {1..30}; do
         exit 1
     fi
 
-    # Try netcat first (faster)
-    if nc -z localhost ${COLLECTOR_PORT} 2>/dev/null; then
-        echo "[ENTRYPOINT] ✓ Port ${COLLECTOR_PORT} is open (netcat check)"
-        # Try HTTP ping
-        if curl -s -f http://localhost:${COLLECTOR_PORT}/ping > /dev/null 2>&1; then
-            echo "[ENTRYPOINT] ✓ Collector HTTP endpoint responded successfully"
+    # Try netcat first (faster) - use 127.0.0.1 to avoid IPv6 issues
+    if nc -z 127.0.0.1 ${COLLECTOR_PORT} 2>/dev/null; then
+        echo "[ENTRYPOINT] ✓ Port ${COLLECTOR_PORT} is open on 127.0.0.1 (netcat check)"
+        # Try HTTP ping - use 127.0.0.1 to avoid IPv6 resolution
+        if curl -s -f http://127.0.0.1:${COLLECTOR_PORT}/ping > /dev/null 2>&1; then
+            echo "[ENTRYPOINT] ✓ Collector HTTP endpoint responded successfully on 127.0.0.1:${COLLECTOR_PORT}"
             COLLECTOR_READY=true
             break
         else
             echo "[ENTRYPOINT] ⚠ Port is open but HTTP endpoint not responding yet..."
+            echo "[ENTRYPOINT] Trying curl with verbose output..."
+            curl -v http://127.0.0.1:${COLLECTOR_PORT}/ping 2>&1 | head -10 || true
         fi
     else
-        echo "[ENTRYPOINT] Port ${COLLECTOR_PORT} not open yet..."
+        echo "[ENTRYPOINT] Port ${COLLECTOR_PORT} not open on 127.0.0.1 yet..."
+        # Also check IPv6 for debugging
+        if nc -z ::1 ${COLLECTOR_PORT} 2>/dev/null; then
+            echo "[ENTRYPOINT] ⚠ Port is open on IPv6 (::1) but not on IPv4 (127.0.0.1)"
+            echo "[ENTRYPOINT] This may cause connection issues - collector should listen on 0.0.0.0"
+        fi
     fi
 
     # Show collector process status every 5 attempts
