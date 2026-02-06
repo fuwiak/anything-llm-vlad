@@ -14,7 +14,6 @@ export default function SingleUserAuth() {
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [downloadComplete, setDownloadComplete] = useState(false);
   const [token, setToken] = useState(null);
-  const [customAppName, setCustomAppName] = useState(null);
 
   const {
     isOpen: isRecoveryCodeModalOpen,
@@ -58,15 +57,6 @@ export default function SingleUserAuth() {
     }
   }, [downloadComplete, token]);
 
-  useEffect(() => {
-    const fetchCustomAppName = async () => {
-      const { appName } = await System.fetchCustomAppName();
-      setCustomAppName(appName || "");
-      setLoading(false);
-    };
-    fetchCustomAppName();
-  }, []);
-
   return (
     <>
       <form
@@ -80,9 +70,6 @@ export default function SingleUserAuth() {
                 {t("login.multi-user.welcome")}
               </h3>
             </div>
-            <p className="text-zinc-400 light:text-zinc-600 text-sm text-center">
-              {t("login.sign-in", { appName: customAppName || "AnythingLLM" })}
-            </p>
           </div>
         </div>
         <div className="w-full px-12">

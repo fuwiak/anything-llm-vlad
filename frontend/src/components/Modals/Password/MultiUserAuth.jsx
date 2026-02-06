@@ -180,7 +180,6 @@ export default function MultiUserAuth() {
   const [token, setToken] = useState(null);
   const [showRecoveryForm, setShowRecoveryForm] = useState(false);
   const [showResetPasswordForm, setShowResetPasswordForm] = useState(false);
-  const [customAppName, setCustomAppName] = useState(null);
 
   const {
     isOpen: isRecoveryCodeModalOpen,
@@ -263,15 +262,6 @@ export default function MultiUserAuth() {
     }
   }, [downloadComplete, user, token]);
 
-  useEffect(() => {
-    const fetchCustomAppName = async () => {
-      const { appName } = await System.fetchCustomAppName();
-      setCustomAppName(appName || "");
-      setLoading(false);
-    };
-    fetchCustomAppName();
-  }, []);
-
   if (showRecoveryForm) {
     return (
       <RecoveryForm
@@ -296,9 +286,6 @@ export default function MultiUserAuth() {
                 {t("login.multi-user.welcome")}
               </h3>
             </div>
-            <p className="text-zinc-400 light:text-zinc-600 text-sm text-center">
-              {t("login.sign-in", { appName: customAppName || "AnythingLLM" })}
-            </p>
           </div>
         </div>
         <div className="w-full px-12">
