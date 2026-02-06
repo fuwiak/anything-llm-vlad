@@ -218,7 +218,11 @@ export default function GeneralEmbeddingPreference() {
     async function fetchKeys() {
       const _settings = await System.keys();
       setSettings(_settings);
-      setSelectedEmbedder(_settings?.EmbeddingEngine || "native");
+      const engine = _settings?.EmbeddingEngine || "native";
+      const validEngine = EMBEDDERS.some((e) => e.value === engine)
+        ? engine
+        : "native";
+      setSelectedEmbedder(validEngine);
       setHasEmbeddings(_settings?.HasExistingEmbeddings || false);
       setHasCachedEmbeddings(_settings?.HasCachedEmbeddings || false);
       setLoading(false);
@@ -233,9 +237,9 @@ export default function GeneralEmbeddingPreference() {
     setFilteredEmbedders(filtered);
   }, [searchQuery, selectedEmbedder]);
 
-  const selectedEmbedderObject = EMBEDDERS.find(
-    (embedder) => embedder.value === selectedEmbedder
-  );
+  const selectedEmbedderObject =
+    EMBEDDERS.find((embedder) => embedder.value === selectedEmbedder) ??
+    EMBEDDERS[0];
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
