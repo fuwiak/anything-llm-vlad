@@ -8,8 +8,6 @@ import useLogo from "@/hooks/useLogo";
 import useUser from "@/hooks/useUser";
 import Footer from "../Footer";
 import SettingsButton from "../SettingsButton";
-import { Link } from "react-router-dom";
-import paths from "@/utils/paths";
 import { useTranslation } from "react-i18next";
 import { useSidebarToggle, ToggleSidebarButton } from "./SidebarToggle";
 import SearchBox from "./SearchBox";
@@ -18,7 +16,6 @@ import { createPortal } from "react-dom";
 
 export default function Sidebar() {
   const { user } = useUser();
-  const { logo } = useLogo();
   const sidebarRef = useRef(null);
   const { showSidebar, setShowSidebar, canToggleSidebar } = useSidebarToggle();
   const {
@@ -38,13 +35,6 @@ export default function Sidebar() {
       >
         <div className="flex shrink-0 w-full justify-center my-[18px]">
           <div className="flex justify-between w-[250px] min-w-[250px]">
-            <Link to={paths.home()} aria-label="Home">
-              <img
-                src={logo}
-                alt="Logo"
-                className={`rounded max-h-[24px] object-contain transition-opacity duration-500 ${showSidebar ? "opacity-100" : "opacity-0"}`}
-              />
-            </Link>
             {canToggleSidebar && (
               <ToggleSidebarButton
                 showSidebar={showSidebar}
